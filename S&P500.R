@@ -114,3 +114,5 @@ ggplot(data=plotdata,aes(x=Date))+
 sqrt(mean((LOOCV$y-LOOCV$Predicted)^2))
 #預測誤差
 sqrt(mean((LOOCV$y-LOOCV$cvpred)^2))
+#S&P500 標準差
+sd(Y)
