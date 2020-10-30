@@ -50,7 +50,7 @@ ggplot(data=plot)+geom_line(aes(x=day,y=rom))+
   geom_point(x=na_row+1,y=data[na_row+1,na_col],col="Blue",cex=1)+
   scale_x_continuous(breaks=na_row,labels=date[na_row])
 ```
-遺失值位在05.03的rom欄位
+遺失值位在05/13的rom欄位
 ![](https://i.imgur.com/VmIYBNj.png)
 ```R
 #位在相對平穩的區段，用前後值取平均補值
