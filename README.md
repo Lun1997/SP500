@@ -1,7 +1,9 @@
-# 用可加模型擬合S&P500金融指數
+# 比較 linear regression 和 additive regression(nonlinear) 的擬合效果
+
 * 預測目標:S&P500
 * 練習資料:2020.01~2020.10營業日
 * 參與預測指標:VIX VFINX VBMFX ROMO VMOT 
+ 
 
 資料型態:208個營業日 x 6種金融指標
 
