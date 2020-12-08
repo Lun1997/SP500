@@ -1,9 +1,9 @@
 #  linear regression VS spline regression(nonlinear) 
 
-* 預測目標:S&P500
+* 預測目標:S&P500調整收盤價
 * 練習資料:2020.01~2020.10營業日
-* 參與預測指標:VIX VFINX VBMFX ROMO VMOT 
- 
+* feacture:VIX VFINX VBMFX ROMO VMOT 
+* 模型驗證:
 
 資料型態:208個營業日 x 6種金融指標
 
