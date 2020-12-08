@@ -1,4 +1,4 @@
-# 比較 linear regression 和 additive regression(nonlinear) 的擬合效果
+#  linear regression VS spline regression(nonlinear) 
 
 * 預測目標:S&P500
 * 練習資料:2020.01~2020.10營業日
