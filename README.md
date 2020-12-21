@@ -1,4 +1,4 @@
-#  linear regression VS spline regression(nonlinear) 
+# spline regression(nonlinear) 
 
 * 預測目標:S&P500調整收盤價
 * 練習資料:2020.01~2020.10營業日
