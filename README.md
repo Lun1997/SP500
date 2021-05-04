@@ -259,8 +259,8 @@ P2+annotate("text",
 ![image](https://github.com/Lun1997/SP500/blob/main/VFINX%20%E9%A0%90%E6%B8%AC.jpg)
 
 #### 結論
-訓練過程overfitting，預測效果有限<br>
-此模型在實務應用上餐數量會快速膨脹導致運算效果降低
+* 訓練過程overfitting，預測效果有限
+* 此模型在實務應用上參數量會快速膨脹導致運算效果降低
 
 
 
