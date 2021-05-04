@@ -178,7 +178,7 @@ P1+annotate("text",
 ![image](https://github.com/Lun1997/SP500/blob/main/VFINX%20%E6%93%AC%E5%90%88.jpg)
 
 #### 預測
-``'R
+```R
 #測試
 test=read.csv("預測區間.csv")
 date_test=as.character(test$X[-1]) #日期對應VFINX
@@ -207,6 +207,7 @@ colnames(basismix_test)=c(paste("V",0:(ncol(basismix_test)-2),sep=""),"y")
 basismix_test=as.data.frame(basismix_test)
 ```
 #### 預測效果
+
 ```R
 pred=predict(model,basismix_test)
 RMSE=sqrt(mean((pred-Y_test)^2))
@@ -256,6 +257,10 @@ P2+annotate("text",
            colour = "Blue")
 ```
 ![image](https://github.com/Lun1997/SP500/blob/main/VFINX%20%E9%A0%90%E6%B8%AC.jpg)
+
+#### 結論
+訓練過程overfitting，預測效果有限
+此模型在實務應用上餐數量會快速膨脹導致運算效果降低
 
 
 
