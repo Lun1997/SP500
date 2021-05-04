@@ -1,77 +1,87 @@
 library(splines)
+library(ggplot2)
+library(tidyr)
+str1=function(string){
+  index=gsub("-","/",string) 
+  return(index)
+}
+str2=function(string){
+  index=gregexpr("-",string)[[1]][1]+1
+  index2=substring(string,index,nchar(string))
+  index3=sub("-","/",index2) 
+  return(index3)
+}
+
 #data====
-data=read.csv("測試資料.csv")
-head(data)
-date=data$Date[-1]
-data$spx[1:nrow(data)-1]=data$spx[2:nrow(data)]
+data=read.csv("建模資料.csv")
+date=data$X[-1] #日期對應VFINX，用前一天的特徵預測當日 VFINX
+data$VFINX[1:nrow(data)-1]=data$VFINX[2:nrow(data)]
 data=data[1:nrow(data)-1,]
 data=data[,-1]
 head(data)
-#NA====
+#NA:沒有遺失值====
 sum(is.na(data))
 
-na_col=which(is.na(data))%/%nrow(data) +1
-na_row=which(is.na(data))%%nrow(data)
-if(na_row==0){na_row=nrow(data)}
-colnames(data)[na_col]
-date[na_row]
-library(ggplot2)
-plot=data.frame(day=1:nrow(data),rom=data[,na_col])
-ggplot(data=plot)+geom_line(aes(x=day,y=rom))+
-  geom_vline(xintercept=na_row,col=2,lty=2)+
-  geom_point(x=na_row-1,y=data[na_row-1,na_col],col="Blue",cex=1)+
-  geom_point(x=na_row+1,y=data[na_row+1,na_col],col="Blue",cex=1)+
-  scale_x_continuous(breaks=na_row,labels=date[na_row])
-
-#遺漏值位在相對平穩的區段，用前後值取平均補值
-data[na_row,na_col]=mean(data[na_row-1,na_col],
-                         data[na_row+1,na_col])
-
-#B-spline====
 knot=function(x,lowbond,upperbond){
   if(x==0){return(NULL)}
   else{return(seq(lowbond,upperbond,by=(upperbond-lowbond)/(x+1))[c(-1,-(x+2))])}
 }
 
-#Quadratic spline
-order=3 
+#cubic spline
+order=4
 var_num=ncol(data)-1
-Y=data$spx
+Y=data$VFINX
 
-#嘗試節點組合
-kn=0:10
-knotset=expand.grid(kn,kn,kn,kn,kn)
-RSSCV=c()
-for(N in 1:nrow(knotset)){
-  basis=list()
-  #基底矩陣
-  for(var in 1:var_num){
-    x=data[,var]
-    low=min(x)
-    up=max(x)
-    B=bs(x,deg=order-1, knots=knot(knotset[N,var],low,up), Boundary.knots=c(low,up),intercept=F)
-    basis[[var]]=B
-  }
-  #基底調整
-  basismix=do.call(cbind,basis)
-  basismix=cbind(rep(1,nrow(data)),basismix,Y)
-  colnames(basismix)=c(paste("V",0:(ncol(basismix)-2),sep=""),"y")
-  basismix=as.data.frame(basismix)
-  #model
-  model=lm(y~.-1,data=basismix)
-  hii.v=lm.influence(model)$hat
-  rsscv=mean((model$resid/(1-hii.v))^2)
-  RSSCV[N]=rsscv
+#試行節點組合，以LOOCV取最佳組合
+kn=15:30
+knotset=expand.grid(kn,kn,kn)
+head(knotset)
+
+#平行運算=====
+library(parallel)
+myCPU=detectCores()
+cl=makeCluster(myCPU-1)
+clusterEvalQ(cl,c(library(splines)))
+clusterExport(cl,c("var_num","data","order","knot","knotset","Y","bs"))  
+ 
+                 
+parll=function(N){
+basis=list()
+#基底矩陣
+for(var in 1:var_num){
+x=data[,var]
+low=min(x)
+up=max(x)
+B=bs(x,deg=order-1, knots=knot(knotset[N,var],low,up), Boundary.knots=c(low,up),intercept=F)
+basis[[var]]=B
 }
+#基底調整
+basismix=do.call(cbind,basis)
+u=apply(basismix,2,mean)
+for(i in 1:ncol(basismix)){
+ basismix[,i]=basismix[,i]+u[i]
+}
+basismix=cbind(rep(1,nrow(data)),basismix,Y)
+colnames(basismix)=c(paste("V",0:(ncol(basismix)-2),sep=""),"y")
+basismix=as.data.frame(basismix)
+#model
+model=lm(y~.-1,data=basismix)
+hii.v=lm.influence(model)$hat
+rsscv=mean((model$resid/(1-hii.v))^2)
+ return(rsscv)
+}          
+ptm <- proc.time()
+RSSCV=parSapply(cl,1:nrow(knotset),parll)
+proc.time() - ptm
+stopCluster(cl)
 
-
+#====
 bestset=which.min(RSSCV)
 bestknot=knotset[bestset,]
 bestknot=as.vector(as.matrix(bestknot))
 #最佳節點組合
 bestknot
-
-#用最佳節點執行B-spline近似
+#用最佳節點執行B-spline近似====
 basis=list()
 for(var in 1:var_num){
   x=data[,var]
@@ -82,53 +92,125 @@ for(var in 1:var_num){
 }
 #基底調整
 basismix=do.call(cbind,basis)
+u=apply(basismix,2,mean)
+for(i in 1:ncol(basismix)){
+  basismix[,i]=basismix[,i]+u[i]
+}
+#basismix=apply(basismix,2,Scale)
 basismix=cbind(rep(1,nrow(data)),basismix,Y)
 colnames(basismix)=c(paste("V",0:(ncol(basismix)-2),sep=""),"y")
 basismix=as.data.frame(basismix)
 #model
 model=lm(y~.-1,data=basismix)
-#LOOCV====
-library(DAAG)
-LOOCV=cv.lm(basismix,model,m=nrow(basismix),plotit = F)
-head(LOOCV)
+RSS=sum((model$residuals)^2)
+AIC=2*(ncol(basismix)-1) + nrow(basismix)*log(RSS/nrow(basismix))
+#plot
+date=str1(date)
 
+plots=gather(data.frame(True=Y,Fit=model$fitted.values),
+             key="keys",value="values",
+             True,Fit)
+plots$Date=1:length(Y)
 
-#視覺化====
-library(ggplot2)
-date=as.character(date)
-str=function(string){
-  mon=substring(string,6,7)
-  day=substring(string,9,10)
-  return(paste(mon,"/",day,sep=""))
-}
-date=str(date)
-plotdata=data.frame(Date=1:length(Y),true=Y,Pred=LOOCV$cvpred,fit=LOOCV$Predicted)
-P=ggplot(data=plotdata,aes(x=Date))+
-   geom_line(aes(y=fit,col="擬合值"))+
-   geom_line(aes(y=true,col="實際值"),lty=2)+
-   geom_line(aes(y=Pred,col="LOOCV預測值"))+
-   scale_x_continuous(breaks=c(seq(1,length(Y),9),length(Y)),
-                      labels=date[c(seq(1,length(Y),9),length(Y))])+
-   labs(x="day",y="S&P500",title="S&P500",
-        subtitle="2020.01~2020.10",
-        caption="leave one out prediction")+
+P1=ggplot(plots,aes(x=Date,y=values,group=keys,lty=keys,col=keys))+
+   geom_line()+
+   scale_x_continuous(breaks=c(seq(1,length(Y),500),length(Y)),
+                      
+                      labels=date[c(seq(1,length(Y),500),length(Y))])+
+  
+   labs(x="day",y="VFINX",title="VFINX",
+       subtitle="1990.01.03~2019.09.27 訓練資料擬合")+
+  
    theme(plot.title=element_text(hjust = 0.5,face="bold"))+
    theme(plot.subtitle=element_text(hjust = 0.5,face="bold"))+
-   scale_colour_manual(name="",breaks=c("實際值","擬合值","LOOCV預測值"),
-                       values = c("black","blue","red"))
-   
-   
-   
-  
+   scale_colour_manual(name="",breaks=c("True","Fit"),
+                       values = c("Blue","red"),
+                       labels=c("實際值","擬合值"))+
+   scale_linetype_manual(name="",breaks=c("True","Fit"),
+                        values = c(2,1),
+                        labels=c("實際值","擬合值"))+
+   theme(legend.position="top")
 
-#統計====
-a1=paste("模型殘差     :",sqrt(mean((LOOCV$y-LOOCV$Predicted)^2)))
-a2=paste("預測誤差     :",sqrt(mean((LOOCV$y-LOOCV$cvpred)^2)))
-a3=paste("S&P500標準差 :",sd(Y))
-paste(a1,"\n",a2,"\n",a3)
-P+geom_text(x=160,y=5000,
-            aes(label=paste(a1,"\n",a2,"\n",a3)),
-            size=4,family="Times New Roman")
+P1+annotate("text",
+            label=paste("RSS =",RSS,"\n","AIC =",AIC),
+            x = 1000, y =200, 
+            size =4, 
+            colour = "Black")
 
-  
+#測試====
+test=read.csv("預測區間.csv")
+date_test=test$X[-1] #日期對應VFINX
+test$VFINX[1:nrow(test)-1]=test$VFINX[2:nrow(test)]
+test=test[1:nrow(test)-1,]
+test=test[,-1]
+head(test)
+Y_test=test$VFINX
 
+basis_test=list()
+for(var in 1:var_num){
+  x=test[,var]
+  low=min(x)
+  up=max(x)
+  B=bs(x,deg=order-1, knots=knot(bestknot[var],low,up), Boundary.knots=c(low,up),intercept=F)
+  basis_test[[var]]=B
+}
+#基底調整
+basismix_test=do.call(cbind,basis_test)
+#basismix_test=apply(basismix_test,2,Scale)
+u=apply(basismix_test[,1:ncol(basismix_test)],2,mean)
+for(i in 1:ncol(basismix_test)){
+  basismix_test[,i]=basismix_test[,i]+u[i]
+}
+basismix_test=cbind(rep(1,nrow(test)),basismix_test,Y_test)
+colnames(basismix_test)=c(paste("V",0:(ncol(basismix_test)-2),sep=""),"y")
+
+
+basismix_test=as.data.frame(basismix_test)
+
+
+pred=predict(model,basismix_test)
+RSME=sqrt(mean((pred-Y_test)^2))
+RSME
+sd(Y_test)
+
+#畫圖====
+date_test=str2(date_test)
+#長資料畫法
+
+plotdata=gather(data.frame(True=Y_test,Pred=pred),key="keys",value="values",
+           True,Pred)
+plotdata$Date=1:length(Y_test)
+
+P2=ggplot(plotdata,aes(x=Date,y=values,group=keys,lty=keys,col=keys))+
+   geom_line()+
+   scale_x_continuous(breaks=c(seq(1,length(Y_test),15),length(Y_test)),
+                     labels=date_test[c(seq(1,length(Y_test),15),length(Y_test))])+
+   labs(x="day",y="VFINX",title="VFINX",
+        subtitle="2019.09.30~2020.09.30 測試資料預測"
+        )+
+   theme(plot.title=element_text(hjust = 0.5,face="bold"))+
+   theme(plot.subtitle=element_text(hjust = 0.5,face="bold"))+
+   scale_colour_manual(name="",breaks=c("True","Pred"),
+                       values = c("black","red"),
+                       labels=c("實際值","預測值"))+
+   scale_linetype_manual(name="",breaks=c("True","Pred"),
+                         values = c(1,1),
+                         labels=c("實際值","預測值"))+
+   theme(legend.position="top")+
+   geom_vline(xintercept=which(date_test=="12/31"),lty=2,col="blue")
+
+P2+annotate("text",
+            label=paste("RSME =",RSME,"\n","SD =",sd(Y_test)),
+            x = 220, y =150, 
+            size =4, 
+            colour = "Blue")+
+  annotate("text",
+           label="2019",
+           x = 50, y =350, 
+           size =4, 
+           colour = "Blue")+
+  annotate("text",
+           label="2020",
+           x = 80, y =350, 
+           size =4, 
+           colour = "Blue")
